@@ -1,168 +1,153 @@
 const express = require('express');
-const { v4: uuidv4 } = require('uuid')
-const port = 3333
+const cors = require('cors');
+const { v4: uuidv4 } = require('uuid');
 
 const app = express();
 
-app.use(express.json())
+app.use(cors());
+app.use(express.json());
 
-const customers = []
+const users = [];
 
-function verifyExistingAccount(request, response, next) {
-  const { cpf } = request.headers
+function checksExistsUserAccount(request, response, next) {
+  const { username } = request.headers
 
-  const customer = customers.find(item => item.cpf === cpf)
+  const user = users.find(item => item.username === username)
 
-  if (!customer) {
-    return response.status(400).json({ message: "Conta não encontrada!" })
+  if (!user) {
+    return response.status(400).json({ error: "Usuário não encontrado!" })
   }
 
-  request.customer = customer
+  request.user = user
+  return next()
+}
+
+function alreadyExistis(request, response, next) {
+  const { username } = request.body
+
+  const alreadyExistis = users.some(user => user.username === username)
+  if (alreadyExistis) {
+    return response.status(400).json({ message: "Usuário já cadastrado!" })
+  }
 
   return next()
 }
 
-function getBalance(statement) {
-  const balance = statement.reduce((acc, operation) => {
-    if (operation.type === "credit") {
-      return acc + operation.amount
-    } else {
-      return acc - operation.amount
-    }
-  }, 0)
+app.post("/user", alreadyExistis, (request, response) => {
+  const { name, username } = request.body
+  const id = uuidv4()
 
-  return balance
-
-}
-
-app.post("/account", (request, response) => {
-  const { cpf, name } = request.body;
-  const id = uuidv4();
-
-  const alreadyExistis = customers.some(item => item.cpf === cpf)
-
-  if (alreadyExistis) {
-    return response.status(400).json({ message: "Este cpf já está cadastrado!" })
-  }
-  customers.push({
-    cpf,
+  const user = {
     name,
+    username,
     id,
-    statement: []
-  })
+    todos: []
+  }
+  users.push(user)
 
-  return response.status(201).send()
+  return response.status(201).json({ message: "Usuário cadastrado com sucesso!" })
+});
+
+app.get("/user", checksExistsUserAccount, (request, response) => {
+  // @ts-ignore
+  const { user } = request
+
+  return response.status(200).json(user)
 })
 
-app.get("/customers", (_request, response) => {
-  return response.status(200).json(customers)
-})
+//================================================================
 
-
-app.get("/statement", verifyExistingAccount, (request, response) => {
-
+app.post('/todos', checksExistsUserAccount, (request, response) => {
   // @ts-ignore
-  const { customer } = request
-  return response.json(customer.statement)
-})
+  const { user } = request
 
-// @ts-ignore
-app.post("/deposit", verifyExistingAccount, (request, response) => {
-  // @ts-ignore
-  const { description, amount } = request.body
+  const { title, deadline } = request.body
 
-  // @ts-ignore
-  const { customer } = request
-
-  const statementOperation = {
-    description,
-    amount,
-    created_at: new Date(),
-    type: 'credit'
+  const todo = {
+    title,
+    deadline,
+    done: false,
+    id: user.todos.length + 1
   }
 
-  customer.statement.push(statementOperation)
+  user.todos.push(todo)
+  return response.status(201).json(user)
+});
 
-  return response.status(201).send()
-})
-
-app.post("/withdraw", verifyExistingAccount, (request, response) => {
-  const { amount, description } = request.body
+app.get('/todos', checksExistsUserAccount, (request, response) => {
   // @ts-ignore
-  const { customer } = request
+  const { user } = request
 
-  const balance = getBalance(customer.statement)
-  if (balance < amount) {
-    return (response.status(400).json({ error: "Insufficient funds!" }))
+  return response.status(200).json(user.todos)
+});
+
+
+app.put('/todos/:id', checksExistsUserAccount, (request, response) => {
+  // @ts-ignore
+  const { user } = request
+  const { id } = request.params
+  const { title, deadline } = request.body
+
+  let index = user.todos.findIndex((todo) => todo.id == id)
+  const hasTodo = user.todos.some((todo) => todo.id == id)
+
+  const todo = {
+    id: user.todos[index].id,
+    title,
+    done: user.todos[index].done,
+    deadline
   }
 
-  const statementOperation = {
-    amount,
-    description,
-    created_at: new Date(),
-    type: 'debit'
+  user.todos[index] = todo
+  console.log(user.todos[index], 'alr')
+
+  if (!hasTodo) {
+    return response.status(400).json({ error: "Nenhum Todo encontrado!" })
   }
 
-  customer.statement.push(statementOperation)
-  return (response.status(200).json({ message: "show de bola" })).send()
-})
+  return response.status(200).json(user.todos)
 
-app.get("/statement/data", verifyExistingAccount, (request, response) => {
+});
+
+app.patch('/todos/:id/done', checksExistsUserAccount, (request, response) => {
   // @ts-ignore
-  const { customer } = request
+  const { user } = request
+  const { id } = request.params
+  const { done } = request.body
 
-  const { date } = request.query
+  let index = user.todos.findIndex((todo) => todo.id == id)
+  const hasTodo = user.todos.some((todo) => todo.id == id)
 
-  const dateFormat = new Date(date + " 00:00")
+  const todo = {
+    id: user.todos[index].id,
+    title: user.todos[index].title,
+    done: done,
+    deadline: user.todos[index].deadline
+  }
 
-  const statement = customer.statement.filter(
-    item => item.created_at.toDateString() ===
-      new Date(dateFormat).toDateString())
+  user.todos[index] = todo
 
-  return response.status(201).send(statement)
+  if (!hasTodo) {
+    return response.status(400).json({ error: "Nenhum Todo encontrado!" })
+  }
 
-})
+  return response.status(200).json(user.todos)
+});
 
-app.get("/customer/", verifyExistingAccount, (request, response) => {
+app.delete('/todos/:id', checksExistsUserAccount, (request, response) => {
   // @ts-ignore
-  const { customer } = request
+  const { user } = request
+  const { id } = request.params
 
-  return response.status(200).json(customer)
-})
+  const filtered = user.todos.filter(todo => todo.id != id)
 
-app.put("/customer", verifyExistingAccount, (request, response) => {
-  // @ts-ignore
-  const { customer } = request
+  user.todos = filtered
+  console.log(filtered)
 
-  const { name } = request.body
-  customer.name = name
+  return response.status(200).json(user)
 
-  response.status(201).json(customer)
-})
+});
 
-app.delete("/customer", verifyExistingAccount, (request, response) => {
-  // @ts-ignore
-  const { customer } = request
+module.exports = app;
 
-  customers.splice(customer, 1)
-
-  // way 2
-  // const filtered = customers.filter(item => item.cpf !== customer.cpf)
-  // customers = filtered
-
-  return response.status(204).json(customers)
-})
-
-
-app.get("/balance", verifyExistingAccount, (request, response) => {
-  // @ts-ignore
-  const { customer } = request
-
-  const balance = getBalance(customer.statement)
-  console.log(customer.statement)
-  console.log(balance)
-
-  return response.status(200).json(balance)
-})
-
-app.listen(port);
+app.listen(3333)
