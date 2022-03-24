@@ -27,7 +27,7 @@ function getBalance(statement) {
     if (operation.type === "credit") {
       return acc + operation.amount
     } else {
-      acc - operation.amount
+      return acc - operation.amount
     }
   }, 0)
 
@@ -151,6 +151,18 @@ app.delete("/customer", verifyExistingAccount, (request, response) => {
   // customers = filtered
 
   return response.status(204).json(customers)
+})
+
+
+app.get("/balance", verifyExistingAccount, (request, response) => {
+  // @ts-ignore
+  const { customer } = request
+
+  const balance = getBalance(customer.statement)
+  console.log(customer.statement)
+  console.log(balance)
+
+  return response.status(200).json(balance)
 })
 
 app.listen(port);
