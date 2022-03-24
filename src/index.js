@@ -54,6 +54,10 @@ app.post("/account", (request, response) => {
   return response.status(201).send()
 })
 
+app.get("/customers", (_request, response) => {
+  return response.status(200).json(customers)
+})
+
 
 app.get("/statement", verifyExistingAccount, (request, response) => {
 
@@ -101,6 +105,52 @@ app.post("/withdraw", verifyExistingAccount, (request, response) => {
 
   customer.statement.push(statementOperation)
   return (response.status(200).json({ message: "show de bola" })).send()
+})
+
+app.get("/statement/data", verifyExistingAccount, (request, response) => {
+  // @ts-ignore
+  const { customer } = request
+
+  const { date } = request.query
+
+  const dateFormat = new Date(date + " 00:00")
+
+  const statement = customer.statement.filter(
+    item => item.created_at.toDateString() ===
+      new Date(dateFormat).toDateString())
+
+  return response.status(201).send(statement)
+
+})
+
+app.get("/customer/", verifyExistingAccount, (request, response) => {
+  // @ts-ignore
+  const { customer } = request
+
+  return response.status(200).json(customer)
+})
+
+app.put("/customer", verifyExistingAccount, (request, response) => {
+  // @ts-ignore
+  const { customer } = request
+
+  const { name } = request.body
+  customer.name = name
+
+  response.status(201).json(customer)
+})
+
+app.delete("/customer", verifyExistingAccount, (request, response) => {
+  // @ts-ignore
+  const { customer } = request
+
+  customers.splice(customer, 1)
+
+  // way 2
+  // const filtered = customers.filter(item => item.cpf !== customer.cpf)
+  // customers = filtered
+
+  return response.status(204).json(customers)
 })
 
 app.listen(port);
